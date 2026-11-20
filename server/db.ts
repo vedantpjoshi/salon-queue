@@ -43,7 +43,7 @@ export class AppDatabase {
     if (this.pool) {
       const insert = /^\s*INSERT\b/i.test(sql) && !/\bRETURNING\b/i.test(sql);
       const statement = insert ? `${sql.trim().replace(/;$/, '')} RETURNING id` : sql;
-      const result = await (this.client ?? this.pool).query(statement, params);
+      const result = await (this.client ?? this.pool).query(toPostgresSql(statement), params);
       return {
         lastInsertRowid: Number(result.rows[0]?.id ?? 0),
         changes: result.rowCount ?? 0,
