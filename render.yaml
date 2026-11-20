@@ -3,6 +3,7 @@ services:
     name: glamour-queue
     runtime: node
     plan: free
+    region: singapore
     buildCommand: npm ci && npm run build
     startCommand: NODE_ENV=production tsx server/index.ts
     healthCheckPath: /api/health
