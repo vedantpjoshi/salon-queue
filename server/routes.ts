@@ -1,6 +1,7 @@
 import { Request, Response, Express } from 'express';
 import { Server } from 'socket.io';
 import { AppDatabase, getDB } from './db';
+import { requireAdmin, setupAdminAuth } from './adminAuth';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   Placed: ['InProgress', 'Cancelled'],
@@ -41,6 +42,7 @@ async function orderWithItems(db: AppDatabase, id: number) {
 }
 
 export function setupRoutes(app: Express, io: Server) {
+  setupAdminAuth(app);
   app.get('/api/health', async (_req: Request, res: Response) => {
     try {
       await getDB().get('SELECT 1 AS healthy');
@@ -64,7 +66,7 @@ export function setupRoutes(app: Express, io: Server) {
     }
   });
 
-  app.post('/api/services', async (req: Request, res: Response) => {
+  app.post('/api/services', requireAdmin, async (req: Request, res: Response) => {
     try {
       const db = getDB();
       const { name, category, price, duration, description, type } = req.body ?? {};
@@ -92,7 +94,7 @@ export function setupRoutes(app: Express, io: Server) {
     }
   });
 
-  app.put('/api/services/:id', async (req: Request, res: Response) => {
+  app.put('/api/services/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
       const db = getDB();
       const id = orderIdFrom(req, res);
@@ -121,7 +123,7 @@ export function setupRoutes(app: Express, io: Server) {
     }
   });
 
-  app.delete('/api/services/:id', async (req: Request, res: Response) => {
+  app.delete('/api/services/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
       const db = getDB();
       const id = orderIdFrom(req, res);
@@ -224,7 +226,7 @@ export function setupRoutes(app: Express, io: Server) {
     }
   });
 
-  app.patch('/api/orders/:id/status', async (req: Request, res: Response) => {
+  app.patch('/api/orders/:id/status', requireAdmin, async (req: Request, res: Response) => {
     try {
       const db = getDB();
       const id = orderIdFrom(req, res);
@@ -265,7 +267,7 @@ export function setupRoutes(app: Express, io: Server) {
     }
   });
 
-  app.get('/api/admin/stats', async (_req: Request, res: Response) => {
+  app.get('/api/admin/stats', requireAdmin, async (_req: Request, res: Response) => {
     try {
       const db = getDB();
       const today = todayFilter(db, 'created_at');

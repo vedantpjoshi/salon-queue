@@ -9,6 +9,7 @@ import {
 import { socket } from '../lib/socket';
 import { Service, AdminStats } from '../lib/types';
 import Navbar from '../components/Navbar';
+import { adminLogin, adminLogout, getAdminSession } from '../lib/api';
 
 const CATEGORIES = ['Hair', 'Skin', 'Nails', 'Spa'];
 const TYPES = ['Quick', 'Standard', 'Premium'];
@@ -16,6 +17,10 @@ const TYPES = ['Quick', 'Standard', 'Premium'];
 const empty = { name: '', category: 'Hair', price: '', duration: '', description: '', type: 'Standard' };
 
 export default function Admin() {
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,6 +31,12 @@ export default function Admin() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    getAdminSession().then((session) => setAuthenticated(session.authenticated)).catch(() => setAuthenticated(false));
+  }, []);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    setLoading(true);
     loadAll();
 
     const onC = (s: Service) => setServices((p) => [...p, s]);
@@ -46,7 +57,20 @@ export default function Admin() {
       socket.off('order:new', refresh);
       socket.off('order:updated', refresh);
     };
-  }, []);
+  }, [authenticated]);
+
+  async function handleLogin(event: React.FormEvent) {
+    event.preventDefault();
+    setSigningIn(true); setAuthError('');
+    try { await adminLogin(password); setPassword(''); setAuthenticated(true); }
+    catch (err) { setAuthError(err instanceof Error ? err.message : 'Unable to sign in'); }
+    finally { setSigningIn(false); }
+  }
+
+  async function handleLogout() {
+    await adminLogout();
+    setStats(null); setAuthenticated(false);
+  }
 
   async function loadAll() {
     try {
@@ -111,6 +135,33 @@ export default function Admin() {
     catch (err) { console.error(err); }
   }
 
+  if (authenticated === null) {
+    return <div className="min-h-screen bg-gray-50"><Navbar /><div className="flex items-center justify-center h-[60vh]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600" /></div></div>;
+  }
+
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-[#f7f4ff]"><Navbar />
+        <div className="max-w-5xl mx-auto px-5 py-12 md:py-20 grid md:grid-cols-2 gap-10 items-center">
+          <div><span className="inline-flex rounded-full bg-violet-100 text-violet-700 px-3 py-1 text-sm font-semibold">SALON TEAM</span>
+            <h1 className="mt-5 text-4xl md:text-5xl font-black tracking-tight text-gray-900">Your salon,<br/><span className="text-violet-600">in the flow.</span></h1>
+            <p className="mt-4 text-gray-600 text-lg">Sign in to manage today’s queue, update services, and keep every guest moving.</p>
+            <div className="mt-8 grid grid-cols-3 gap-3 text-center">{[['01','Live queue'],['02','Service menu'],['03','Daily stats']].map(([n,label])=><div key={n} className="rounded-2xl bg-white p-4 shadow-sm"><b className="text-violet-600">{n}</b><p className="text-xs mt-2 text-gray-500">{label}</p></div>)}</div>
+          </div>
+          <form onSubmit={handleLogin} className="rounded-3xl bg-white p-7 md:p-9 shadow-xl shadow-violet-100 border border-violet-50">
+            <div className="w-12 h-12 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center text-2xl">✦</div>
+            <h2 className="mt-5 text-2xl font-bold text-gray-900">Welcome back</h2><p className="mt-1 text-gray-500">Admin sign-in</p>
+            <label className="block mt-7 text-sm font-semibold text-gray-700" htmlFor="admin-password">Admin password</label>
+            <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(e)=>setPassword(e.target.value)} required className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="Enter your password" />
+            {authError && <p role="alert" className="mt-3 text-sm text-red-600">{authError}</p>}
+            <button disabled={signingIn} className="mt-5 w-full rounded-xl bg-violet-600 hover:bg-violet-700 text-white py-3 font-bold transition disabled:opacity-60">{signingIn?'Signing in…':'Sign in to dashboard →'}</button>
+            <p className="mt-4 text-center text-xs text-gray-400">Customers can browse and book without signing in.</p>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -127,7 +178,7 @@ export default function Admin() {
       <Navbar />
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">⚙️ Admin Dashboard</h1>
+        <div className="mb-6 flex items-center justify-between gap-4"><div><p className="text-xs uppercase tracking-widest text-violet-600 font-bold">Glamour Queue · Control room</p><h1 className="text-2xl font-bold text-gray-800 mt-1">Admin Dashboard</h1></div><button onClick={handleLogout} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Sign out</button></div>
 
         {/* Stats */}
         {stats && (

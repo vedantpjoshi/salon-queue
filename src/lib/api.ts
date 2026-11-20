@@ -19,6 +19,9 @@ export const fetchServices = () => request('/services');
 export const getActiveOrders = () => request('/orders');
 export const getOrder = (id: number) => request(`/orders/${id}`);
 export const getAdminStats = () => request('/admin/stats');
+export const getAdminSession = () => request('/admin/session');
+export const adminLogin = (password: string) => request('/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
+export const adminLogout = () => request('/admin/logout', { method: 'POST' });
 
 export const createOrder = (data: {
   customer_name: string;

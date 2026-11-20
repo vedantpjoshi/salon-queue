@@ -12,3 +12,7 @@ services:
         value: Asia/Kolkata
       - key: DATABASE_URL
         sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
