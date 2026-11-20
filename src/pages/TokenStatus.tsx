@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
-import { getOrder, cancelOrder } from '../lib/api';
+import { Clock, CheckCircle, XCircle, ArrowLeft, Users } from 'lucide-react';
+import { getActiveOrders, getOrder, cancelOrder } from '../lib/api';
 import { socket } from '../lib/socket';
 import { Order } from '../lib/types';
 import Navbar from '../components/Navbar';
@@ -19,13 +19,21 @@ export default function TokenStatus() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
+  const [queueOrders, setQueueOrders] = useState<Order[]>([]);
+  const [queueReady, setQueueReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     loadOrder();
+    loadQueue();
 
+    const addToQueue = (incoming: Order) => {
+      setQueueOrders((previous) => previous.some((item) => item.id === incoming.id)
+        ? previous.map((item) => item.id === incoming.id ? incoming : item)
+        : [...previous, incoming]);
+    };
     const handler = (updated: Order) => {
       if (updated.id === Number(id)) {
         setOrder(updated);
@@ -33,10 +41,19 @@ export default function TokenStatus() {
           try { navigator?.vibrate?.(200); } catch { /* ignore */ }
         }
       }
+      if (updated.status === 'CheckedOut' || updated.status === 'Cancelled') {
+        setQueueOrders((previous) => previous.filter((item) => item.id !== updated.id));
+      } else {
+        addToQueue(updated);
+      }
     };
 
+    socket.on('order:new', addToQueue);
     socket.on('order:updated', handler);
-    return () => { socket.off('order:updated', handler); };
+    return () => {
+      socket.off('order:new', addToQueue);
+      socket.off('order:updated', handler);
+    };
   }, [id]);
 
   async function loadOrder() {
@@ -46,6 +63,16 @@ export default function TokenStatus() {
       setError('Order not found');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadQueue() {
+    try {
+      setQueueOrders(await getActiveOrders());
+    } catch (err) {
+      console.error('Failed to load queue position:', err);
+    } finally {
+      setQueueReady(true);
     }
   }
 
@@ -66,8 +93,7 @@ export default function TokenStatus() {
     if (order.status === 'Completed' || order.status === 'CheckedOut') return 'Done!';
     if (order.status === 'Cancelled') return 'Cancelled';
     if (order.status === 'InProgress') return 'Currently being served';
-    const dur = order.items?.reduce((s, i) => s + i.duration * i.quantity, 0) || 15;
-    return `~${dur} min estimated`;
+    return 'Waiting in the live queue';
   }
 
   const currentStep = STATUS_STEPS.indexOf(order?.status || 'Placed');
@@ -101,6 +127,19 @@ export default function TokenStatus() {
   const isCompleted = order.status === 'Completed';
   const isCancelled = order.status === 'Cancelled';
   const isCheckedOut = order.status === 'CheckedOut';
+  const waitingAhead = queueOrders.filter((candidate) =>
+    candidate.status === 'Placed' && candidate.token_number < order.token_number,
+  );
+  const inProgressAhead = queueOrders.filter((candidate) => candidate.status === 'InProgress');
+  const queuePosition = waitingAhead.length + inProgressAhead.length + 1;
+  const estimatedQueueWait = [...inProgressAhead, ...waitingAhead].reduce((total, candidate) => {
+    const duration = candidate.items?.reduce((sum, item) => sum + item.duration * item.quantity, 0) || 15;
+    if (candidate.status !== 'InProgress') return total + duration;
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(candidate.updated_at);
+    const startedAt = new Date(hasTimezone ? candidate.updated_at : `${candidate.updated_at.replace(' ', 'T')}Z`).getTime();
+    const elapsed = Number.isFinite(startedAt) ? Math.max(0, (Date.now() - startedAt) / 60000) : 0;
+    return total + Math.max(0, Math.ceil(duration - elapsed));
+  }, 0);
 
   return (
     <div
@@ -162,6 +201,29 @@ export default function TokenStatus() {
 
         {/* Progress steps */}
         {!isCancelled && !isCheckedOut && (
+          <>
+          {order.status === 'Placed' && (
+            <div className="mb-6 rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-violet-500">Your place in the queue</p>
+                  <p className="mt-1 text-4xl font-black text-violet-700">{queueReady ? `#${queuePosition}` : '…'}</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {queueReady
+                      ? waitingAhead.length + inProgressAhead.length === 0
+                        ? 'You’re next to be served'
+                        : `${waitingAhead.length + inProgressAhead.length} customer${waitingAhead.length + inProgressAhead.length === 1 ? '' : 's'} ahead of you`
+                      : 'Checking the live queue…'}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-violet-100 p-3 text-violet-700"><Users className="h-6 w-6" /></div>
+              </div>
+              <div className="mt-4 flex items-center gap-2 border-t border-violet-100 pt-3 text-sm font-medium text-gray-600">
+                <Clock className="h-4 w-4 text-violet-500" />
+                {queueReady ? `Approx. wait: ${estimatedQueueWait === 0 ? 'Your turn soon' : `~${estimatedQueueWait} min`}` : 'Estimating wait time'}
+              </div>
+            </div>
+          )}
           <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
             <div className="flex items-center justify-between">
               {STATUS_STEPS.map((step, i) => {
@@ -207,6 +269,7 @@ export default function TokenStatus() {
               </div>
             </div>
           </div>
+          </>
         )}
 
         {/* Order details */}
