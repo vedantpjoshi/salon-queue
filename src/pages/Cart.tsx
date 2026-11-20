@@ -34,6 +34,7 @@ export default function Cart() {
         customer_phone: phone.trim(),
         items: items.map((i) => ({ service_id: i.service.id, quantity: i.quantity })),
       });
+      localStorage.setItem('glamour-last-order', String(order.id));
       clearCart();
       navigate(`/token/${order.id}`);
     } catch (err: any) {
