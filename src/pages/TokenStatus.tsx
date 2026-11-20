@@ -1,0 +1,245 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Clock, CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
+import { getOrder, cancelOrder } from '../lib/api';
+import { socket } from '../lib/socket';
+import { Order } from '../lib/types';
+import Navbar from '../components/Navbar';
+
+const STATUS_STEPS = ['Placed', 'InProgress', 'Completed'];
+const STATUS_LABELS: Record<string, string> = {
+  Placed: 'Placed',
+  InProgress: 'In Progress',
+  Completed: 'Completed',
+  CheckedOut: 'Checked Out',
+  Cancelled: 'Cancelled',
+};
+
+export default function TokenStatus() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    loadOrder();
+
+    const handler = (updated: Order) => {
+      if (updated.id === Number(id)) {
+        setOrder(updated);
+        if (updated.status === 'Completed') {
+          try { navigator?.vibrate?.(200); } catch { /* ignore */ }
+        }
+      }
+    };
+
+    socket.on('order:updated', handler);
+    return () => { socket.off('order:updated', handler); };
+  }, [id]);
+
+  async function loadOrder() {
+    try {
+      setOrder(await getOrder(Number(id)));
+    } catch {
+      setError('Order not found');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCancel() {
+    if (!order) return;
+    setCancelling(true);
+    try {
+      setOrder(await cancelOrder(order.id));
+    } catch (err: any) {
+      setError(err.message || 'Failed to cancel');
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  function getEstimatedWait(): string {
+    if (!order) return '';
+    if (order.status === 'Completed' || order.status === 'CheckedOut') return 'Done!';
+    if (order.status === 'Cancelled') return 'Cancelled';
+    if (order.status === 'InProgress') return 'Currently being served';
+    const dur = order.items?.reduce((s, i) => s + i.duration * i.quantity, 0) || 15;
+    return `~${dur} min estimated`;
+  }
+
+  const currentStep = STATUS_STEPS.indexOf(order?.status || 'Placed');
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="text-center py-16">
+          <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <p className="text-gray-500 text-lg">{error || 'Order not found'}</p>
+          <button onClick={() => navigate('/')} className="mt-4 text-violet-600 hover:underline">
+            Go to Menu
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isCompleted = order.status === 'Completed';
+  const isCancelled = order.status === 'Cancelled';
+  const isCheckedOut = order.status === 'CheckedOut';
+
+  return (
+    <div
+      className={`min-h-screen transition-colors duration-500 ${
+        isCompleted ? 'bg-green-50' : 'bg-gray-50'
+      }`}
+    >
+      <Navbar />
+
+      <div className="max-w-lg mx-auto px-4 py-6">
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-1 text-violet-600 mb-4 hover:underline text-sm"
+        >
+          <ArrowLeft className="w-4 h-4" /> New Booking
+        </button>
+
+        {/* Token */}
+        <div className="text-center py-8">
+          <p className="text-sm text-gray-500 uppercase tracking-wider mb-2">Your Token</p>
+          <div
+            className={`text-8xl font-black ${
+              isCompleted
+                ? 'text-green-600'
+                : isCancelled
+                ? 'text-red-400'
+                : 'text-violet-600'
+            }`}
+          >
+            #{order.token_number}
+          </div>
+          <p className="mt-2 text-lg font-medium text-gray-600">{order.customer_name}</p>
+        </div>
+
+        {/* Completed celebration */}
+        {isCompleted && (
+          <div className="bg-green-100 border border-green-300 rounded-2xl p-6 text-center mb-6">
+            <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-2" />
+            <p className="text-green-800 text-xl font-bold">Your service is ready!</p>
+            <p className="text-green-600 mt-1">Please collect at the counter</p>
+          </div>
+        )}
+
+        {/* Cancelled */}
+        {isCancelled && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center mb-6">
+            <XCircle className="w-12 h-12 text-red-400 mx-auto mb-2" />
+            <p className="text-red-600 text-lg font-bold">Booking Cancelled</p>
+          </div>
+        )}
+
+        {/* Checked out */}
+        {isCheckedOut && (
+          <div className="bg-violet-50 border border-violet-200 rounded-2xl p-6 text-center mb-6">
+            <CheckCircle className="w-12 h-12 text-violet-500 mx-auto mb-2" />
+            <p className="text-violet-700 text-lg font-bold">Checked Out — Thank you!</p>
+          </div>
+        )}
+
+        {/* Progress steps */}
+        {!isCancelled && !isCheckedOut && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
+            <div className="flex items-center justify-between">
+              {STATUS_STEPS.map((step, i) => {
+                const active = i <= currentStep;
+                const current = i === currentStep;
+                return (
+                  <div key={step} className="flex items-center flex-1">
+                    <div className="flex flex-col items-center flex-1">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
+                          transition-all duration-500 ${
+                            active
+                              ? 'bg-violet-600 text-white scale-110'
+                              : 'bg-gray-200 text-gray-500'
+                          } ${current ? 'ring-4 ring-violet-200' : ''}`}
+                      >
+                        {i + 1}
+                      </div>
+                      <span
+                        className={`text-xs mt-2 font-medium text-center ${
+                          active ? 'text-violet-600' : 'text-gray-400'
+                        }`}
+                      >
+                        {STATUS_LABELS[step]}
+                      </span>
+                    </div>
+                    {i < STATUS_STEPS.length - 1 && (
+                      <div
+                        className={`h-1 flex-1 mx-1 rounded transition-all duration-500 ${
+                          i < currentStep ? 'bg-violet-600' : 'bg-gray-200'
+                        }`}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="text-center pt-4 border-t mt-4">
+              <div className="flex items-center justify-center gap-2 text-gray-600">
+                <Clock className="w-4 h-4" />
+                <span>{getEstimatedWait()}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Order details */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm mb-6">
+          <h3 className="font-semibold text-gray-800 mb-3">Services Booked</h3>
+          <div className="space-y-2">
+            {order.items?.map((item, i) => (
+              <div key={i} className="flex justify-between text-sm">
+                <span className="text-gray-600">
+                  {item.service_name} × {item.quantity}
+                </span>
+                <span className="font-medium">₹{item.price * item.quantity}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border-t mt-3 pt-3 flex justify-between font-bold">
+            <span>Total</span>
+            <span className="text-violet-600">₹{order.total}</span>
+          </div>
+        </div>
+
+        {/* Cancel */}
+        {order.status === 'Placed' && (
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="w-full border-2 border-red-400 text-red-500 py-3 rounded-xl font-medium
+                       hover:bg-red-50 transition disabled:opacity-50"
+          >
+            {cancelling ? 'Cancelling…' : 'Cancel Booking'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
