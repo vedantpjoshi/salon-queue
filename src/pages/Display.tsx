@@ -69,7 +69,20 @@ export default function Display() {
   const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
-    getActiveOrders().then(setOrders).catch((err) => console.error('Failed to load queue:', err));
+    let disposed = false;
+    const refreshQueue = async () => {
+      try {
+        const activeOrders = await getActiveOrders();
+        if (!disposed) setOrders(activeOrders);
+      } catch (err) {
+        console.error('Failed to load queue:', err);
+      }
+    };
+
+    void refreshQueue();
+    const refreshTimer = window.setInterval(refreshQueue, 10_000);
+    const refreshOnFocus = () => { if (document.visibilityState === 'visible') void refreshQueue(); };
+    window.addEventListener('focus', refreshOnFocus);
 
     const onNew = (order: Order) => {
       setOrders((previous) => previous.some((item) => item.id === order.id)
@@ -100,6 +113,9 @@ export default function Display() {
     socket.on('order:new', onNew);
     socket.on('order:updated', onUpdated);
     return () => {
+      disposed = true;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('focus', refreshOnFocus);
       socket.off('order:new', onNew);
       socket.off('order:updated', onUpdated);
       timers.current.forEach((timer) => clearTimeout(timer));
