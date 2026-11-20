@@ -133,7 +133,10 @@ export async function initDB() {
   if (process.env.DATABASE_URL) {
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: true },
+      ssl: {
+        ca: fs.readFileSync(path.join(__dirname, 'supabase-ca.crt'), 'utf8'),
+        rejectUnauthorized: true,
+      },
       max: 5,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
