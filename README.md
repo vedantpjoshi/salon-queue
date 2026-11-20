@@ -2,6 +2,7 @@
 
 **Live demo:** _Pending Render deployment_
 **Hosted on:** Render Free + Supabase Free (PostgreSQL)
+**Public source:** [GitHub repository](https://github.com/vedantpjoshi/salon-queue.)
 
 ---
 
