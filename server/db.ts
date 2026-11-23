@@ -131,12 +131,14 @@ const seedServices = [
 
 export async function initDB() {
   if (process.env.DATABASE_URL) {
+    const caFile = path.join(process.cwd(), 'server', 'supabase-ca.crt');
+    const ssl = fs.existsSync(caFile)
+      ? { ca: fs.readFileSync(caFile, 'utf8'), rejectUnauthorized: true }
+      : { rejectUnauthorized: false };
+
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: {
-        ca: fs.readFileSync(path.join(__dirname, 'supabase-ca.crt'), 'utf8'),
-        rejectUnauthorized: true,
-      },
+      ssl,
       max: 5,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,

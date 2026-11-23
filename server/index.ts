@@ -43,9 +43,9 @@ async function main() {
     });
   }
 
-  const PORT = process.env.PORT || 3001;
-  server.listen(PORT, () => {
-    console.log(`🚀 Glamour Queue server running on port ${PORT}`);
+  const PORT = Number(process.env.PORT) || 3001;
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Glamour Queue server running on http://0.0.0.0:${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 }
