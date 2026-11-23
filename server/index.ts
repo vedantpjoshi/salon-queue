@@ -22,7 +22,7 @@ app.use(express.json());
 
 async function main() {
   if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is required in production so order data survives restarts.');
+    console.warn('⚠️  DATABASE_URL not set. Falling back to local SQLite (sql.js). Set DATABASE_URL in Render for cloud PostgreSQL.');
   }
 
   // Initialize database (async because sql.js loads WASM)

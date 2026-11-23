@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Clock, Play, CheckCircle, Package } from 'lucide-react';
+import { Clock, Play, CheckCircle, Package, Scissors } from 'lucide-react';
 import { getActiveOrders, updateOrderStatus } from '../lib/api';
 import { socket } from '../lib/socket';
 import { Order } from '../lib/types';
 import Navbar from '../components/Navbar';
 
 const COLUMNS = [
-  { status: 'Placed', label: 'NEW', color: 'bg-blue-500', icon: Package },
-  { status: 'InProgress', label: 'IN PROGRESS', color: 'bg-amber-500', icon: Play },
-  { status: 'Completed', label: 'COMPLETED', color: 'bg-green-500', icon: CheckCircle },
+  { status: 'Placed', label: 'NEW REQUESTS', badge: 'bg-[#5b3d75]', header: 'bg-[#6b4b8b]', icon: Package },
+  { status: 'InProgress', label: 'IN PROGRESS', badge: 'bg-[#9c6128]', header: 'bg-[#b87333]', icon: Play },
+  { status: 'Completed', label: 'READY / COMPLETED', badge: 'bg-[#3b6b55]', header: 'bg-[#4d826a]', icon: CheckCircle },
 ];
 
-const ACTIONS: Record<string, { label: string; next: string; color: string }> = {
-  Placed: { label: 'Start', next: 'InProgress', color: 'bg-amber-500 hover:bg-amber-600' },
-  InProgress: { label: 'Complete', next: 'Completed', color: 'bg-green-500 hover:bg-green-600' },
-  Completed: { label: 'Check Out', next: 'CheckedOut', color: 'bg-violet-600 hover:bg-violet-700' },
+const ACTIONS: Record<string, { label: string; next: string; style: string }> = {
+  Placed: { label: 'Start Service', next: 'InProgress', style: 'bg-[#b87333] hover:bg-[#9c6128] text-white shadow-sm' },
+  InProgress: { label: 'Mark Ready', next: 'Completed', style: 'bg-[#4d826a] hover:bg-[#3b6b55] text-white shadow-sm' },
+  Completed: { label: 'Check Out Guest', next: 'CheckedOut', style: 'bg-[#34263e] hover:bg-[#513c60] text-white shadow-sm' },
 };
 
 export default function StylistBoard() {
@@ -84,86 +84,133 @@ export default function StylistBoard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100">
+      <div className="min-h-screen bg-[#fffdfb]">
         <Navbar />
         <div className="flex items-center justify-center h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600" />
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#6b4b8b]" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-[#fffdfb] text-[#34263e]">
       <Navbar />
 
-      <div className="px-4 py-4 max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 mb-4">Stylist Board</h1>
-        {actionError && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{actionError}</p>}
+      <main className="px-4 py-8 max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-violet-100 bg-[#f4eef6] px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[#765b80]">
+              <Scissors className="h-3.5 w-3.5 text-[#6b4b8b]" /> Stylist Board · Active Queue
+            </div>
+            <h1 className="mt-2 font-serif text-3xl sm:text-4xl font-bold tracking-tight text-[#34263e]">
+              Salon Floor & Stations
+            </h1>
+            <p className="mt-1 text-sm text-[#786b7b]">
+              Drag forward or advance each guest through consultation, service, and checkout.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#8c7892]">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            Live sync active ({orders.length} in queue)
+          </div>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {actionError && (
+          <p role="alert" className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {actionError}
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {COLUMNS.map((col) => {
             const colOrders = orders.filter((o) => o.status === col.status);
             const Icon = col.icon;
 
             return (
-              <div key={col.status} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div
-                  className={`${col.color} text-white px-4 py-3 flex items-center justify-between`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Icon className="w-5 h-5" />
-                    <span className="font-bold text-sm">{col.label}</span>
+              <div
+                key={col.status}
+                className="bg-white rounded-3xl border border-[#eee6f0] shadow-[0_4px_24px_rgba(73,49,87,0.04)] overflow-hidden flex flex-col"
+              >
+                {/* Column Header */}
+                <div className={`${col.header} text-white px-5 py-4 flex items-center justify-between`}>
+                  <div className="flex items-center gap-2.5">
+                    <Icon className="w-5 h-5 opacity-90" />
+                    <span className="font-extrabold text-xs tracking-wider uppercase">{col.label}</span>
                   </div>
-                  <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold">
+                  <span className={`${col.badge} px-2.5 py-0.5 rounded-full text-xs font-black shadow-inner`}>
                     {colOrders.length}
                   </span>
                 </div>
 
-                <div className="p-3 space-y-3 min-h-[200px]">
+                {/* Orders List */}
+                <div className="p-4 space-y-3.5 flex-1 min-h-[300px] bg-[#fbf9fc]/40">
                   {colOrders.length === 0 && (
-                    <p className="text-center text-gray-400 text-sm py-8">No orders</p>
+                    <div className="h-48 flex flex-col items-center justify-center text-center p-4 border border-dashed border-[#e6dce8] rounded-2xl text-[#a394a8]">
+                      <Icon className="w-8 h-8 mb-2 opacity-30" />
+                      <p className="text-sm font-semibold">No clients in this queue</p>
+                      <p className="text-xs text-[#b8abbd] mt-0.5">New bookings appear here instantly</p>
+                    </div>
                   )}
 
                   {colOrders.map((order) => {
                     const action = ACTIONS[order.status];
+                    const aged = isOld(order.created_at);
+
                     return (
                       <div
                         key={order.id}
-                        className={`border rounded-lg p-3 transition-all ${
-                          isOld(order.created_at)
-                            ? 'border-red-400 bg-red-50'
-                            : 'border-gray-200'
+                        className={`rounded-2xl p-4 bg-white transition duration-200 border ${
+                          aged
+                            ? 'border-rose-300 bg-rose-50/40 shadow-sm ring-1 ring-rose-200'
+                            : 'border-[#ede5ef] hover:border-[#d9cadc] hover:shadow-md'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-2xl font-black text-violet-600">
-                            #{order.token_number}
-                          </span>
-                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div>
+                            <span className="font-serif text-3xl font-extrabold text-[#6b4b8b] tracking-tight">
+                              #{order.token_number}
+                            </span>
+                            <h3 className="font-bold text-sm text-[#34263e] mt-0.5 leading-snug">
+                              {order.customer_name}
+                            </h3>
+                          </div>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                              aged ? 'bg-rose-100 text-rose-700' : 'bg-[#f4eef6] text-[#765b80]'
+                            }`}
+                          >
                             <Clock className="w-3 h-3" />
                             {elapsed(order.created_at)}
                           </span>
                         </div>
 
-                        <p className="font-medium text-gray-700 text-sm">{order.customer_name}</p>
-
-                        <div className="mt-2 space-y-0.5">
+                        {/* Service items */}
+                        <div className="my-3 space-y-1 rounded-xl bg-[#faf6fc] p-2.5 border border-[#f0e8f2]">
                           {order.items?.map((item, i) => (
-                            <p key={i} className="text-xs text-gray-500">
-                              {item.service_name} × {item.quantity}
-                            </p>
+                            <div key={i} className="flex justify-between items-center text-xs">
+                              <span className="text-[#59475f] font-medium truncate">
+                                {item.service_name}
+                              </span>
+                              <span className="text-[#8c7892] font-bold ml-2 shrink-0">
+                                × {item.quantity}
+                              </span>
+                            </div>
                           ))}
+                          <div className="pt-1.5 mt-1 border-t border-[#e8dbe9] flex justify-between text-xs font-bold text-[#6b4b8b]">
+                            <span>Total</span>
+                            <span>₹{order.total}</span>
+                          </div>
                         </div>
 
+                        {/* Action button */}
                         {action && (
                           <button
                             onClick={() => handleAction(order.id, action.next)}
                             disabled={updating === order.id}
-                            className={`mt-3 w-full ${action.color} text-white py-2 rounded-lg text-sm
-                                        font-semibold transition disabled:opacity-50`}
+                            className={`w-full py-2.5 rounded-full text-xs font-black tracking-wide uppercase transition active:scale-[0.98] ${action.style} disabled:opacity-50`}
                           >
-                            {updating === order.id ? '…' : action.label}
+                            {updating === order.id ? 'Updating…' : action.label}
                           </button>
                         )}
                       </div>
@@ -174,7 +221,7 @@ export default function StylistBoard() {
             );
           })}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
