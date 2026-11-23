@@ -2,6 +2,7 @@ const BASE = '/api';
 
 async function request(url: string, options?: RequestInit) {
   const res = await fetch(`${BASE}${url}`, {
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
@@ -32,8 +33,8 @@ export const createOrder = (data: {
 export const updateOrderStatus = (id: number, status: string) =>
   request(`/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 
-export const cancelOrder = (id: number) =>
-  request(`/orders/${id}/cancel`, { method: 'PATCH' });
+export const cancelOrder = (id: number, cancelToken: string) =>
+  request(`/orders/${id}/cancel`, { method: 'PATCH', body: JSON.stringify({ cancel_token: cancelToken }) });
 
 export const createService = (data: Record<string, unknown>) =>
   request('/services', { method: 'POST', body: JSON.stringify(data) });

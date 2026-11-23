@@ -39,7 +39,7 @@ export default function Admin() {
     setLoading(true);
     loadAll();
 
-    const onC = (s: Service) => setServices((p) => [...p, s]);
+    const onC = (s: Service) => setServices((p) => p.some((item) => item.id === s.id) ? p.map((item) => item.id === s.id ? s : item) : [...p, s]);
     const onU = (s: Service) => setServices((p) => p.map((x) => (x.id === s.id ? s : x)));
     const onD = ({ id }: { id: number }) => setServices((p) => p.filter((x) => x.id !== id));
     const refresh = () => loadStats();

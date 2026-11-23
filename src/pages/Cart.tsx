@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, Clock3 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { createOrder } from '../lib/api';
 import Navbar from '../components/Navbar';
@@ -12,7 +12,15 @@ export default function Cart() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [salonOpen, setSalonOpen] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch('/api/salon/status')
+      .then((response) => response.json())
+      .then((data) => setSalonOpen(Boolean(data.isOpen)))
+      .catch(() => { /* the server still refuses a booking after close */ });
+  }, []);
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -24,7 +32,7 @@ export default function Cart() {
   }
 
   async function handlePlaceOrder() {
-    if (!validate() || items.length === 0) return;
+    if (!validate() || items.length === 0 || !salonOpen) return;
 
     setSubmitting(true);
     setSubmitError('');
@@ -35,6 +43,13 @@ export default function Cart() {
         items: items.map((i) => ({ service_id: i.service.id, quantity: i.quantity })),
       });
       localStorage.setItem('glamour-last-order', String(order.id));
+      if (order.cancel_token) {
+        try {
+          const saved = JSON.parse(localStorage.getItem('glamour-cancel-tokens') || '{}');
+          saved[order.id] = order.cancel_token;
+          localStorage.setItem('glamour-cancel-tokens', JSON.stringify(saved));
+        } catch { /* the token page still opens if storage is unavailable */ }
+      }
       clearCart();
       navigate(`/token/${order.id}`);
     } catch (err: any) {
@@ -47,28 +62,29 @@ export default function Cart() {
   const estDuration = items.reduce((s, i) => s + i.service.duration * i.quantity, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#fffdfb] text-[#34263e]">
       <Navbar />
 
       <div className="max-w-lg mx-auto px-4 py-6">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-1 text-violet-600 mb-4 hover:underline text-sm"
+          className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-[#6b4b8b]"
         >
           <ArrowLeft className="w-4 h-4" /> Back to services
         </button>
 
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <ShoppingBag className="w-6 h-6 text-violet-600" /> Your Cart
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9879a3]">Your visit</p>
+        <h1 className="mt-1 mb-6 flex items-center gap-2 font-serif text-3xl font-semibold tracking-tight">
+          <ShoppingBag className="w-6 h-6 text-[#6b4b8b]" /> Your bag
         </h1>
 
         {items.length === 0 ? (
           <div className="text-center py-16">
             <ShoppingBag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">Your cart is empty</p>
+            <p className="font-serif text-2xl text-[#34263e]">Your bag is empty</p>
             <button
               onClick={() => navigate('/')}
-              className="mt-4 bg-violet-600 text-white px-6 py-2 rounded-xl hover:bg-violet-700 transition"
+              className="mt-4 rounded-full bg-[#6b4b8b] px-6 py-3 text-sm font-bold text-white hover:bg-[#563872] transition"
             >
               Browse Services
             </button>
@@ -80,14 +96,14 @@ export default function Cart() {
               {items.map((item) => (
                 <div
                   key={item.service.id}
-                  className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-4"
+                  className="flex items-center gap-4 rounded-3xl border border-[#eee6f0] bg-white p-4 shadow-sm"
                 >
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-800 truncate">{item.service.name}</h3>
-                    <p className="text-sm text-gray-500">
+                    <h3 className="font-semibold truncate">{item.service.name}</h3>
+                    <p className="text-sm text-[#887d8c]">
                       {item.service.duration} min · ₹{item.service.price} each
                     </p>
-                    <p className="text-violet-600 font-bold mt-1">
+                    <p className="mt-1 font-bold text-[#6b4b8b]">
                       ₹{item.service.price * item.quantity}
                     </p>
                   </div>
@@ -129,24 +145,24 @@ export default function Cart() {
             </div>
 
             {/* Summary */}
-            <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
-              <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <div className="mb-6 rounded-3xl border border-[#eee6f0] bg-white p-4 shadow-sm">
+              <div className="mb-2 flex items-center justify-between text-sm text-[#6f6274]">
+                <span className="inline-flex items-center gap-1"><Clock3 className="h-4 w-4" /> Est. duration</span>
+                <span>~{estDuration} min</span>
+              </div>
+              <div className="mb-2 flex justify-between text-sm text-[#6f6274]">
                 <span>Services ({totalItems})</span>
                 <span>₹{totalAmount}</span>
               </div>
-              <div className="flex justify-between text-sm text-gray-600 mb-2">
-                <span>Est. Duration</span>
-                <span>~{estDuration} min</span>
-              </div>
-              <div className="border-t pt-2 flex justify-between font-bold text-lg">
+              <div className="flex justify-between border-t pt-2 text-lg font-bold">
                 <span>Total</span>
-                <span className="text-violet-600">₹{totalAmount}</span>
+                <span className="text-[#6b4b8b]">₹{totalAmount}</span>
               </div>
             </div>
 
-            {/* Customer details */}
-            <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
-              <h2 className="font-semibold text-gray-800 mb-3">Your Details</h2>
+            <div className="mb-6 rounded-3xl border border-[#eee6f0] bg-white p-4 shadow-sm">
+              <h2 className="mb-1 font-semibold">Your details</h2>
+              <p className="mb-3 text-xs text-[#887d8c]">We’ll call this name when your token is ready. Your phone stays off the waiting-room screen.</p>
               <div className="space-y-3">
                 <div>
                   <input
@@ -187,13 +203,19 @@ export default function Cart() {
               </div>
             )}
 
+            {!salonOpen && (
+              <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                The salon is closed. New bookings open from 9:00 AM to 7:45 PM.
+              </div>
+            )}
+
             <button
               onClick={handlePlaceOrder}
-              disabled={submitting || items.length === 0}
-              className="w-full bg-violet-600 text-white py-4 rounded-xl text-lg font-semibold
-                         hover:bg-violet-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              disabled={submitting || items.length === 0 || !salonOpen}
+              className="w-full rounded-full bg-[#6b4b8b] py-4 text-lg font-semibold text-white
+                         shadow-lg shadow-violet-200 transition hover:bg-[#563872] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? 'Booking…' : `Book Appointment · ₹${totalAmount}`}
+              {submitting ? 'Booking…' : !salonOpen ? 'Salon closed' : `Join the queue · ₹${totalAmount}`}
             </button>
           </>
         )}

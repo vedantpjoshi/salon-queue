@@ -2,7 +2,7 @@
 
 **Live demo:** [https://salon-queue-rnam.onrender.com](https://salon-queue-rnam.onrender.com)
 **Hosted on:** Render Free + Supabase Free (PostgreSQL)
-**Public source:** [GitHub repository](https://github.com/vedantpjoshi/salon-queue.)
+**Public source:** [GitHub repository](https://github.com/vedantpjoshi/salon-queue)
 
 ---
 

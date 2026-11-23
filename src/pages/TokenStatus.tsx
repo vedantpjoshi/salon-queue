@@ -76,11 +76,27 @@ export default function TokenStatus() {
     }
   }
 
+  function savedCancelToken() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('glamour-cancel-tokens') || '{}');
+      return typeof saved[String(id)] === 'string' ? saved[String(id)] : '';
+    } catch {
+      return '';
+    }
+  }
+
   async function handleCancel() {
     if (!order) return;
+    const cancelToken = savedCancelToken();
+    if (!cancelToken) {
+      setError('This booking can only be cancelled from the device that placed it.');
+      return;
+    }
+    if (!window.confirm('Cancel this booking? Your token will leave the queue.')) return;
     setCancelling(true);
     try {
-      setOrder(await cancelOrder(order.id));
+      setOrder(await cancelOrder(order.id, cancelToken));
+      setError('');
     } catch (err: any) {
       setError(err.message || 'Failed to cancel');
     } finally {
@@ -109,9 +125,9 @@ export default function TokenStatus() {
     );
   }
 
-  if (error || !order) {
+  if (!order) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#fffdfb]">
         <Navbar />
         <div className="text-center py-16">
           <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
@@ -144,7 +160,7 @@ export default function TokenStatus() {
   return (
     <div
       className={`min-h-screen transition-colors duration-500 ${
-        isCompleted ? 'bg-green-50' : 'bg-gray-50'
+        isCompleted ? 'bg-emerald-50' : 'bg-[#fffdfb]'
       }`}
     >
       <Navbar />
@@ -159,9 +175,9 @@ export default function TokenStatus() {
 
         {/* Token */}
         <div className="text-center py-8">
-          <p className="text-sm text-gray-500 uppercase tracking-wider mb-2">Your Token</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#9879a3]">Your token</p>
           <div
-            className={`text-8xl font-black ${
+            className={`font-serif text-8xl font-medium ${
               isCompleted
                 ? 'text-green-600'
                 : isCancelled
@@ -293,14 +309,23 @@ export default function TokenStatus() {
 
         {/* Cancel */}
         {order.status === 'Placed' && (
-          <button
-            onClick={handleCancel}
-            disabled={cancelling}
-            className="w-full border-2 border-red-400 text-red-500 py-3 rounded-xl font-medium
-                       hover:bg-red-50 transition disabled:opacity-50"
-          >
-            {cancelling ? 'Cancelling…' : 'Cancel Booking'}
-          </button>
+          savedCancelToken() ? (
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="w-full rounded-full border-2 border-rose-300 py-3 font-semibold text-rose-600
+                         transition hover:bg-rose-50 disabled:opacity-50"
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel booking'}
+            </button>
+          ) : (
+            <p className="rounded-2xl bg-[#f5f0f6] px-4 py-3 text-center text-sm text-[#7f7383]">
+              Open this page on the phone that booked the visit to cancel it.
+            </p>
+          )
+        )}
+        {error && order && (
+          <p role="alert" className="mt-3 text-center text-sm text-rose-600">{error}</p>
         )}
       </div>
     </div>

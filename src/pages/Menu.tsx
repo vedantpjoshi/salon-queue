@@ -19,13 +19,17 @@ export default function Menu() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [salonOpen, setSalonOpen] = useState(true);
   const [lastOrderId, setLastOrderId] = useState('');
   const { totalAmount, totalItems } = useCart();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const serviceLoad = fetchServices().then(setServices).catch((err) => console.error('Could not load services:', err));
+    const serviceLoad = fetchServices().then(setServices).catch((err) => {
+      console.error('Could not load services:', err);
+      setLoadError('The menu could not be loaded. Refresh the page and try again.');
+    });
     const queueLoad = getActiveOrders().then(setOrders).catch((err) => console.error('Could not load live queue:', err));
     Promise.all([serviceLoad, queueLoad]).finally(() => setLoading(false));
     checkStatus();
@@ -172,19 +176,24 @@ export default function Menu() {
                 const count = category === 'All' ? services.length : services.filter((service) => service.category === category).length;
                 const selected = activeCategory === category;
                 return <button key={category} onClick={() => setActiveCategory(category)} aria-pressed={selected} className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-bold transition ${selected ? 'bg-[#6b4b8b] text-white shadow-md shadow-violet-200' : 'border border-[#eee6f0] bg-white text-[#776a7b] hover:border-[#d9c8e0] hover:bg-[#faf6fb]'}`}>
-                  {category}<span className={`rounded-full px-1.5 py-0.5 text-[10px] ${selected ? 'bg-white/20 text-white' : 'bg-[#f5f0f6] text-[#9c8aa1]'}`}>{count}</span>
+                  {category}{!loading && <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${selected ? 'bg-white/20 text-white' : 'bg-[#f5f0f6] text-[#9c8aa1]'}`}>{count}</span>}
                 </button>;
               })}
             </div>
           </div>
 
           <div className="mb-4 mt-5 flex items-center justify-between text-xs font-medium text-[#9b8e9e]">
-            <span>{searchQuery || activeCategory !== 'All' ? `${filtered.length} matching services` : `${services.length} salon favourites`}</span>
+            <span>{loading && services.length === 0 ? 'Loading today’s menu…' : searchQuery || activeCategory !== 'All' ? `${filtered.length} matching services` : `${services.length} salon favourites`}</span>
             {loading && <span className="animate-pulse">Refreshing menu…</span>}
           </div>
 
           {loading && services.length === 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-56 animate-pulse rounded-3xl bg-[#f5f0f6]" />)}</div>
+          ) : loadError && services.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-[#e6dbe9] bg-[#fbf8fc] px-6 py-16 text-center">
+              <p className="font-serif text-xl font-semibold">Menu unavailable</p>
+              <p className="mt-1 text-sm text-[#897d8d]">{loadError}</p>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-[#e6dbe9] bg-[#fbf8fc] px-6 py-16 text-center">
               <Search className="mx-auto h-8 w-8 text-[#b69fc0]" />

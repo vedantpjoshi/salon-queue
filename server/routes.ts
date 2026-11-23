@@ -1,3 +1,4 @@
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { Request, Response, Express } from 'express';
 import { Server } from 'socket.io';
 import { AppDatabase, getDB } from './db';
@@ -39,6 +40,19 @@ async function orderWithItems(db: AppDatabase, id: number) {
   if (!order) return undefined;
   const items = await db.all('SELECT * FROM order_items WHERE order_id = ?', [id]);
   return { ...order, items };
+}
+
+function publicOrder(order: any) {
+  if (!order) return order;
+  const { customer_phone: _phone, cancel_token: _token, ...safe } = order;
+  return safe;
+}
+
+function cancelTokenMatches(supplied: unknown, expected: unknown) {
+  if (typeof supplied !== 'string' || typeof expected !== 'string' || !expected) return false;
+  const suppliedBuffer = Buffer.from(supplied);
+  const expectedBuffer = Buffer.from(expected);
+  return suppliedBuffer.length === expectedBuffer.length && timingSafeEqual(suppliedBuffer, expectedBuffer);
 }
 
 export function setupRoutes(app: Express, io: Server) {
@@ -145,7 +159,7 @@ export function setupRoutes(app: Express, io: Server) {
       const orders = await db.all<any>(`SELECT * FROM orders
         WHERE status IN ('Placed', 'InProgress', 'Completed') AND ${todayFilter(db, 'created_at')}
         ORDER BY token_number ASC`);
-      const result = await Promise.all(orders.map(async (order) => ({
+      const result = await Promise.all(orders.map(async (order) => publicOrder({
         ...order, items: await db.all('SELECT * FROM order_items WHERE order_id = ?', [order.id]),
       })));
       res.json(result);
@@ -161,7 +175,7 @@ export function setupRoutes(app: Express, io: Server) {
       if (id === null) return;
       const order = await orderWithItems(getDB(), id);
       if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
-      res.json(order);
+      res.json(publicOrder(order));
     } catch (err) {
       console.error('GET /api/orders/:id error:', err);
       res.status(500).json({ error: 'Failed to fetch order' });
@@ -203,14 +217,15 @@ export function setupRoutes(app: Express, io: Server) {
         total += service.price * quantity;
       }
 
+      const cancelToken = randomBytes(24).toString('base64url');
       const fullOrder = await db.transaction(async (transaction) => {
         if (transaction.isPostgres) await transaction.run('SELECT pg_advisory_xact_lock(74519302)');
         const today = todayFilter(transaction, 'created_at');
         const lastToken = await transaction.get<any>(`SELECT COALESCE(MAX(token_number), 0) AS last_token
           FROM orders WHERE ${today}`);
         const result = await transaction.run(`INSERT INTO orders
-          (token_number, customer_name, customer_phone, status, total) VALUES (?, ?, ?, 'Placed', ?)`,
-        [Number(lastToken?.last_token ?? 0) + 1, customer_name.trim(), customer_phone.trim(), total]);
+          (token_number, customer_name, customer_phone, status, total, cancel_token) VALUES (?, ?, ?, 'Placed', ?, ?)`,
+        [Number(lastToken?.last_token ?? 0) + 1, customer_name.trim(), customer_phone.trim(), total, cancelToken]);
         for (const item of validatedItems) {
           await transaction.run(`INSERT INTO order_items
             (order_id, service_id, service_name, quantity, price, duration) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -218,8 +233,8 @@ export function setupRoutes(app: Express, io: Server) {
         }
         return orderWithItems(transaction, result.lastInsertRowid);
       });
-      io.emit('order:new', fullOrder);
-      res.status(201).json(fullOrder);
+      io.emit('order:new', publicOrder(fullOrder));
+      res.status(201).json({ ...publicOrder(fullOrder), cancel_token: fullOrder.cancel_token });
     } catch (err) {
       console.error('POST /api/orders error:', err);
       res.status(500).json({ error: 'Failed to create order' });
@@ -238,7 +253,7 @@ export function setupRoutes(app: Express, io: Server) {
         res.status(400).json({ error: `Cannot transition from "${order.status}" to "${req.body?.status}"` }); return;
       }
       await db.run("UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [req.body.status, id]);
-      const updated = await orderWithItems(db, id);
+      const updated = publicOrder(await orderWithItems(db, id));
       io.emit('order:updated', updated);
       res.json(updated);
     } catch (err) {
@@ -257,8 +272,11 @@ export function setupRoutes(app: Express, io: Server) {
       if (order.status !== 'Placed') {
         res.status(400).json({ error: 'Can only cancel bookings with "Placed" status' }); return;
       }
+      if (!cancelTokenMatches(req.body?.cancel_token, order.cancel_token)) {
+        res.status(403).json({ error: 'This booking can only be cancelled from the device that placed it.' }); return;
+      }
       await db.run("UPDATE orders SET status = 'Cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
-      const updated = await orderWithItems(db, id);
+      const updated = publicOrder(await orderWithItems(db, id));
       io.emit('order:updated', updated);
       res.json(updated);
     } catch (err) {

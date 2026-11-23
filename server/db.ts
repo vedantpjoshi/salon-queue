@@ -217,6 +217,15 @@ export async function initDB() {
     `);
   }
 
+  if (database.isPostgres) {
+    await database.exec('ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancel_token TEXT');
+  } else {
+    const columns = await database.all<{ name: string }>('PRAGMA table_info(orders)');
+    if (!columns.some((column) => column.name === 'cancel_token')) {
+      await database.exec('ALTER TABLE orders ADD COLUMN cancel_token TEXT');
+    }
+  }
+
   const count = await database.get<{ count: number }>('SELECT COUNT(*) AS count FROM services');
   if (Number(count?.count) === 0) {
     await database.transaction(async (transaction) => {

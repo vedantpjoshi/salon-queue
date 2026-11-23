@@ -21,16 +21,19 @@ export default function StylistBoard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<number | null>(null);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     load();
 
-    const onNew = (o: Order) => setOrders((p) => [...p, o]);
+    const onNew = (o: Order) => setOrders((p) => p.some((item) => item.id === o.id)
+      ? p.map((item) => item.id === o.id ? o : item)
+      : [...p, o]);
     const onUpdated = (u: Order) => {
       if (u.status === 'CheckedOut' || u.status === 'Cancelled') {
         setOrders((p) => p.filter((o) => o.id !== u.id));
       } else {
-        setOrders((p) => p.map((o) => (o.id === u.id ? u : o)));
+        setOrders((p) => p.some((o) => o.id === u.id) ? p.map((o) => (o.id === u.id ? u : o)) : [...p, u]);
       }
     };
 
@@ -54,27 +57,30 @@ export default function StylistBoard() {
 
   async function handleAction(orderId: number, nextStatus: string) {
     setUpdating(orderId);
+    setActionError('');
     try {
       await updateOrderStatus(orderId, nextStatus);
     } catch (err) {
-      console.error(err);
+      setActionError(err instanceof Error ? err.message : 'Could not update that token');
     } finally {
       setUpdating(null);
     }
   }
 
-  function elapsed(created: string): string {
-    // Local SQLite has no timezone suffix; Postgres sends ISO timestamps in UTC.
+  function bookedAt(created: string) {
     const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(created);
-    const timestamp = new Date(hasTimezone ? created : `${created.replace(' ', 'T')}Z`).getTime();
-    const diff = Date.now() - timestamp;
+    return new Date(hasTimezone ? created : `${created.replace(' ', 'T')}Z`).getTime();
+  }
+
+  function elapsed(created: string): string {
+    const diff = Date.now() - bookedAt(created);
     const m = Math.floor(diff / 60000);
-    if (m < 1) return 'Just now';
+    if (!Number.isFinite(m) || m < 1) return 'Just now';
     if (m < 60) return `${m}m ago`;
     return `${Math.floor(m / 60)}h ${m % 60}m`;
   }
 
-  const isOld = (created: string) => Date.now() - new Date(created).getTime() > 20 * 60000;
+  const isOld = (created: string) => Date.now() - bookedAt(created) > 20 * 60000;
 
   if (loading) {
     return (
@@ -92,7 +98,8 @@ export default function StylistBoard() {
       <Navbar />
 
       <div className="px-4 py-4 max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 mb-4">💇 Stylist Board</h1>
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Stylist Board</h1>
+        {actionError && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{actionError}</p>}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {COLUMNS.map((col) => {
