@@ -4,19 +4,41 @@ import { CheckCircle, Clock3, Monitor, Scissors, Users } from 'lucide-react';
 import { getActiveOrders } from '../lib/api';
 import { socket } from '../lib/socket';
 import { Order } from '../lib/types';
+import Navbar from '../components/Navbar';
 
-function QueueCard({ order, tone, badge }: { order: Order; tone: string; badge?: string }) {
+function QueueCard({
+  order,
+  borderStyle,
+  tokenColor,
+  badge,
+  badgeStyle,
+}: {
+  order: Order;
+  borderStyle: string;
+  tokenColor: string;
+  badge?: string;
+  badgeStyle?: string;
+}) {
   return (
-    <article className={`relative overflow-hidden rounded-2xl border ${tone} p-5 md:p-6`}>
-      {badge && (
-        <span className="absolute right-4 top-4 rounded-full bg-white/15 px-3 py-1 text-xs font-bold tracking-wider">
-          {badge}
-        </span>
-      )}
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">Queue token</p>
-      <p className="mt-1 text-5xl font-black tracking-tight md:text-6xl">#{order.token_number}</p>
-      <p className="mt-2 truncate text-lg font-semibold">{order.customer_name}</p>
-      <p className="mt-1 line-clamp-2 text-sm opacity-70">
+    <article
+      className={`relative overflow-hidden rounded-2xl border bg-white p-4 sm:p-5 shadow-sm transition duration-200 hover:shadow-md ${borderStyle}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9879a3]">Queue token</p>
+          <p className={`font-serif text-4xl sm:text-5xl font-black tracking-tight ${tokenColor}`}>
+            #{order.token_number}
+          </p>
+        </div>
+        {badge && (
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider uppercase ${badgeStyle || 'bg-[#f4eef6] text-[#765b80]'}`}>
+            {badge}
+          </span>
+        )}
+      </div>
+
+      <p className="mt-2.5 truncate font-bold text-sm sm:text-base text-[#34263e]">{order.customer_name}</p>
+      <p className="mt-1 line-clamp-1 text-xs text-[#8c7892]">
         {order.items?.map((item) => `${item.service_name} × ${item.quantity}`).join(' · ') || 'Salon service'}
       </p>
     </article>
@@ -28,7 +50,8 @@ function QueueColumn({
   subtitle,
   count,
   icon,
-  accent,
+  headerBg,
+  countBadge,
   children,
   empty,
 }: {
@@ -36,28 +59,34 @@ function QueueColumn({
   subtitle: string;
   count: number;
   icon: ReactNode;
-  accent: string;
+  headerBg: string;
+  countBadge: string;
   children: ReactNode;
   empty: string;
 }) {
   return (
-    <section className="flex min-h-[320px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-900/80">
-      <header className="flex items-center justify-between border-b border-white/10 px-5 py-4 md:px-6">
-        <div className="flex items-center gap-3">
-          <div className={`rounded-xl p-2.5 ${accent}`}>{icon}</div>
+    <section className="flex min-h-[360px] flex-col overflow-hidden rounded-3xl border border-[#eee6f0] bg-white shadow-[0_4px_24px_rgba(73,49,87,0.04)]">
+      <header className={`flex items-center justify-between px-5 py-4 text-white ${headerBg}`}>
+        <div className="flex items-center gap-2.5">
+          <div className="opacity-95">{icon}</div>
           <div>
-            <h2 className="text-lg font-black uppercase tracking-wide md:text-xl">{title}</h2>
-            <p className="text-xs text-slate-400 md:text-sm">{subtitle}</p>
+            <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider">{title}</h2>
+            <p className="text-[11px] text-white/80">{subtitle}</p>
           </div>
         </div>
-        <span className="min-w-10 rounded-full bg-white/10 px-3 py-1 text-center text-lg font-black">{count}</span>
+        <span className={`min-w-8 rounded-full px-2.5 py-0.5 text-center text-xs font-black shadow-inner ${countBadge}`}>
+          {count}
+        </span>
       </header>
-      <div className="grid flex-1 content-start gap-3 p-4 md:p-5">
+
+      <div className="grid flex-1 content-start gap-3 p-4 sm:p-5 bg-[#fbf9fc]/50">
         {count === 0 ? (
-          <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-white/10 text-center text-slate-500">
+          <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-[#e6dce8] text-center text-sm font-medium text-[#a394a8]">
             {empty}
           </div>
-        ) : children}
+        ) : (
+          children
+        )}
       </div>
     </section>
   );
@@ -81,29 +110,44 @@ export default function Display() {
 
     void refreshQueue();
     const refreshTimer = window.setInterval(refreshQueue, 10_000);
-    const refreshOnFocus = () => { if (document.visibilityState === 'visible') void refreshQueue(); };
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') void refreshQueue();
+    };
     window.addEventListener('focus', refreshOnFocus);
 
     const onNew = (order: Order) => {
-      setOrders((previous) => previous.some((item) => item.id === order.id)
-        ? previous.map((item) => item.id === order.id ? order : item)
-        : [...previous, order]);
+      setOrders((previous) =>
+        previous.some((item) => item.id === order.id)
+          ? previous.map((item) => (item.id === order.id ? order : item))
+          : [...previous, order]
+      );
     };
 
     const onUpdated = (updated: Order) => {
       if (updated.status === 'CheckedOut' || updated.status === 'Cancelled') {
         setOrders((previous) => previous.filter((item) => item.id !== updated.id));
-        setBlinking((previous) => { const next = new Set(previous); next.delete(updated.id); return next; });
+        setBlinking((previous) => {
+          const next = new Set(previous);
+          next.delete(updated.id);
+          return next;
+        });
         return;
       }
 
-      setOrders((previous) => previous.some((item) => item.id === updated.id)
-        ? previous.map((item) => item.id === updated.id ? updated : item)
-        : [...previous, updated]);
+      setOrders((previous) =>
+        previous.some((item) => item.id === updated.id)
+          ? previous.map((item) => (item.id === updated.id ? updated : item))
+          : [...previous, updated]
+      );
+
       if (updated.status === 'Completed') {
         setBlinking((previous) => new Set(previous).add(updated.id));
         const timer = setTimeout(() => {
-          setBlinking((previous) => { const next = new Set(previous); next.delete(updated.id); return next; });
+          setBlinking((previous) => {
+            const next = new Set(previous);
+            next.delete(updated.id);
+            return next;
+          });
           timers.current.delete(updated.id);
         }, 5000);
         timers.current.set(updated.id, timer);
@@ -127,57 +171,134 @@ export default function Display() {
   const ready = orders.filter((order) => order.status === 'Completed').sort((a, b) => a.token_number - b.token_number);
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-5 text-white md:px-8 md:py-7">
-      <div className="mx-auto max-w-[1800px]">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-4 md:mb-8">
+    <div className="min-h-screen bg-[#fffdfb] text-[#34263e]">
+      <Navbar />
+
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.24em] text-violet-300">
-              <Scissors className="h-4 w-4" /> Glamour Queue
+            <div className="inline-flex items-center gap-2 rounded-full border border-violet-100 bg-[#f4eef6] px-3.5 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[#765b80]">
+              <Scissors className="h-3.5 w-3.5 text-[#6b4b8b]" /> Glamour Queue · Now Serving
             </div>
-            <h1 className="text-3xl font-black tracking-tight md:text-5xl">Live salon queue</h1>
-            <p className="mt-1 text-sm text-slate-400 md:text-base">Follow your token from waiting to service to collection.</p>
+            <h1 className="mt-2 font-serif text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#34263e]">
+              Live Salon Queue
+            </h1>
+            <p className="mt-1 text-sm sm:text-base text-[#786b7b]">
+              Follow your token as it advances from waiting to consultation to collection.
+            </p>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300">
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" /> Live updates
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800 shadow-sm">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
+            Live sync active ({orders.length} guests in salon)
           </div>
         </header>
 
-        <div className="mb-5 grid grid-cols-3 gap-2 md:mb-7 md:gap-4">
-          <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-3 md:p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200/70 md:text-xs">Waiting</p>
-            <p className="mt-1 text-2xl font-black text-blue-200 md:text-4xl">{waiting.length}</p>
+        {/* Status Metrics Bar */}
+        <div className="mb-8 grid grid-cols-3 gap-3 sm:gap-5">
+          <div className="rounded-3xl border border-[#eee6f0] bg-white p-4 sm:p-5 shadow-[0_4px_20px_rgba(73,49,87,0.04)]">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[#6b4b8b]" />
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#8c7892]">Waiting</p>
+            </div>
+            <p className="mt-2 font-serif text-2xl sm:text-4xl font-black text-[#6b4b8b]">{waiting.length}</p>
           </div>
-          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 md:p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-amber-200/70 md:text-xs">In service</p>
-            <p className="mt-1 text-2xl font-black text-amber-200 md:text-4xl">{inProgress.length}</p>
+
+          <div className="rounded-3xl border border-[#eee6f0] bg-white p-4 sm:p-5 shadow-[0_4px_20px_rgba(73,49,87,0.04)]">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[#b87333]" />
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#8c7892]">In Service</p>
+            </div>
+            <p className="mt-2 font-serif text-2xl sm:text-4xl font-black text-[#b87333]">{inProgress.length}</p>
           </div>
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3 md:p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200/70 md:text-xs">Ready</p>
-            <p className="mt-1 text-2xl font-black text-emerald-200 md:text-4xl">{ready.length}</p>
+
+          <div className="rounded-3xl border border-[#eee6f0] bg-white p-4 sm:p-5 shadow-[0_4px_20px_rgba(73,49,87,0.04)]">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-[#4d826a]" />
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#8c7892]">Ready</p>
+            </div>
+            <p className="mt-2 font-serif text-2xl sm:text-4xl font-black text-[#4d826a]">{ready.length}</p>
           </div>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-3 md:gap-5">
-          <QueueColumn title="Waiting" subtitle="First token is next up" count={waiting.length} icon={<Users className="h-5 w-5" />} accent="bg-blue-500/20 text-blue-300" empty="No customers waiting">
-            {waiting.slice(0, 8).map((order, index) => (
-              <QueueCard key={order.id} order={order} tone={index === 0 ? 'border-blue-400/50 bg-blue-500/15 text-blue-50' : 'border-white/10 bg-slate-800 text-white'} badge={index === 0 ? 'NEXT UP' : undefined} />
+        {/* 3 Columns */}
+        <div className="grid gap-6 xl:grid-cols-3">
+          {/* Waiting Column */}
+          <QueueColumn
+            title="Waiting Queue"
+            subtitle="Next client in line"
+            count={waiting.length}
+            icon={<Users className="h-5 w-5" />}
+            headerBg="bg-[#6b4b8b]"
+            countBadge="bg-[#563872]"
+            empty="No guests waiting"
+          >
+            {waiting.slice(0, 10).map((order, index) => (
+              <QueueCard
+                key={order.id}
+                order={order}
+                borderStyle={index === 0 ? 'border-[#6b4b8b] ring-2 ring-violet-200 bg-violet-50/20' : 'border-[#ede5ef]'}
+                tokenColor="text-[#6b4b8b]"
+                badge={index === 0 ? 'NEXT UP' : undefined}
+                badgeStyle="bg-[#6b4b8b] text-white"
+              />
             ))}
-            {waiting.length > 8 && <p className="text-center text-sm font-medium text-slate-400">+ {waiting.length - 8} more in line</p>}
+            {waiting.length > 10 && (
+              <p className="text-center text-xs font-bold text-[#8c7892] py-2">
+                + {waiting.length - 10} more guests in queue
+              </p>
+            )}
           </QueueColumn>
 
-          <QueueColumn title="In Progress" subtitle="Currently being served" count={inProgress.length} icon={<Clock3 className="h-5 w-5" />} accent="bg-amber-500/20 text-amber-300" empty="No services in progress">
-            {inProgress.map((order) => <QueueCard key={order.id} order={order} tone="border-amber-400/40 bg-amber-500/10 text-amber-50" badge="IN SERVICE" />)}
+          {/* In Service Column */}
+          <QueueColumn
+            title="In Service"
+            subtitle="Currently at salon stations"
+            count={inProgress.length}
+            icon={<Clock3 className="h-5 w-5" />}
+            headerBg="bg-[#b87333]"
+            countBadge="bg-[#9c6128]"
+            empty="No services currently in progress"
+          >
+            {inProgress.map((order) => (
+              <QueueCard
+                key={order.id}
+                order={order}
+                borderStyle="border-amber-200 bg-amber-50/20"
+                tokenColor="text-[#b87333]"
+                badge="IN SERVICE"
+                badgeStyle="bg-amber-100 text-amber-800"
+              />
+            ))}
           </QueueColumn>
 
-          <QueueColumn title="Ready to Collect" subtitle="Please visit the front desk" count={ready.length} icon={<CheckCircle className="h-5 w-5" />} accent="bg-emerald-500/20 text-emerald-300" empty="No tokens ready">
-            {ready.map((order) => <div key={order.id} className={blinking.has(order.id) ? 'animate-blink' : ''}><QueueCard order={order} tone="border-emerald-400/50 bg-emerald-500/15 text-emerald-50" badge="READY" /></div>)}
+          {/* Ready to Collect Column */}
+          <QueueColumn
+            title="Ready to Collect"
+            subtitle="Please visit the front desk"
+            count={ready.length}
+            icon={<CheckCircle className="h-5 w-5" />}
+            headerBg="bg-[#4d826a]"
+            countBadge="bg-[#3b6b55]"
+            empty="No tokens currently ready"
+          >
+            {ready.map((order) => (
+              <div key={order.id} className={blinking.has(order.id) ? 'animate-blink' : ''}>
+                <QueueCard
+                  order={order}
+                  borderStyle="border-emerald-300 ring-2 ring-emerald-200 bg-emerald-50/30"
+                  tokenColor="text-[#4d826a]"
+                  badge="READY"
+                  badgeStyle="bg-emerald-600 text-white"
+                />
+              </div>
+            ))}
           </QueueColumn>
         </div>
 
-        <footer className="mt-6 flex items-center justify-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-slate-500 md:mt-8 md:text-sm">
-          <Monitor className="h-4 w-4" /> Glamour Queue · Live Now Serving Board
+        <footer className="mt-12 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[#a394a8]">
+          <Monitor className="h-4 w-4 text-[#6b4b8b]" /> Glamour Queue · Now Serving Floor
         </footer>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
