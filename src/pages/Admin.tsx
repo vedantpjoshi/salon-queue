@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Plus, Edit2, Trash2, TrendingUp, Users, DollarSign, Star, X, Sparkles,
+  Plus, Edit2, Trash2, TrendingUp, Users, DollarSign, Star, X,
 } from 'lucide-react';
 import {
   fetchServices, getAdminStats,
@@ -9,7 +9,6 @@ import {
 import { socket } from '../lib/socket';
 import { Service, AdminStats } from '../lib/types';
 import Navbar from '../components/Navbar';
-import { adminLogin, adminLogout, getAdminSession } from '../lib/api';
 
 const CATEGORIES = ['Hair', 'Skin', 'Nails', 'Spa'];
 const TYPES = ['Quick', 'Standard', 'Premium'];
@@ -24,10 +23,6 @@ const CATEGORY_COLORS: Record<string, string> = {
 const empty = { name: '', category: 'Hair', price: '', duration: '', description: '', type: 'Standard' };
 
 export default function Admin() {
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [signingIn, setSigningIn] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,13 +33,6 @@ export default function Admin() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getAdminSession()
-      .then((session) => setAuthenticated(session.authenticated))
-      .catch(() => setAuthenticated(false));
-  }, []);
-
-  useEffect(() => {
-    if (!authenticated) return;
     setLoading(true);
     loadAll();
 
@@ -67,28 +55,7 @@ export default function Admin() {
       socket.off('order:new', refresh);
       socket.off('order:updated', refresh);
     };
-  }, [authenticated]);
-
-  async function handleLogin(event: React.FormEvent) {
-    event.preventDefault();
-    setSigningIn(true);
-    setAuthError('');
-    try {
-      await adminLogin(password);
-      setPassword('');
-      setAuthenticated(true);
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Unable to sign in');
-    } finally {
-      setSigningIn(false);
-    }
-  }
-
-  async function handleLogout() {
-    await adminLogout();
-    setStats(null);
-    setAuthenticated(false);
-  }
+  }, []);
 
   async function loadAll() {
     try {
@@ -179,89 +146,6 @@ export default function Admin() {
     }
   }
 
-  if (authenticated === null) {
-    return (
-      <div className="min-h-screen bg-[#fffdfb]">
-        <Navbar />
-        <div className="flex items-center justify-center h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#6b4b8b]" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!authenticated) {
-    return (
-      <div className="min-h-screen bg-[#fffdfb] text-[#34263e]">
-        <Navbar />
-        <main className="max-w-5xl mx-auto px-5 py-12 md:py-20 grid md:grid-cols-2 gap-12 items-center">
-          <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f4eef6] text-[#765b80] px-3.5 py-1 text-xs font-bold uppercase tracking-[0.16em]">
-              <Sparkles className="w-3.5 h-3.5 text-[#6b4b8b]" /> Salon Team Access
-            </span>
-            <h1 className="mt-5 font-serif text-4xl md:text-5xl font-bold tracking-tight text-[#34263e]">
-              Salon Management & <span className="italic text-[#795b87]">Rituals</span>
-            </h1>
-            <p className="mt-4 text-[#786b7b] text-base md:text-lg leading-relaxed">
-              Sign in to manage today’s appointments, modify salon offerings, and review performance metrics.
-            </p>
-            <div className="mt-8 grid grid-cols-3 gap-3 text-center">
-              {[
-                ['01', 'Live floor'],
-                ['02', 'Service menu'],
-                ['03', 'Revenue stats'],
-              ].map(([num, label]) => (
-                <div key={num} className="rounded-2xl border border-[#eee6f0] bg-white p-4 shadow-sm">
-                  <span className="font-serif text-lg font-bold text-[#6b4b8b]">{num}</span>
-                  <p className="text-xs mt-1 font-semibold text-[#8a7a8d]">{label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <form
-            onSubmit={handleLogin}
-            className="rounded-3xl bg-white p-8 md:p-10 shadow-[0_12px_40px_rgba(73,49,87,0.08)] border border-[#ede5ef]"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-[#f4eef6] text-[#6b4b8b] flex items-center justify-center text-xl font-bold shadow-sm">
-              ✦
-            </div>
-            <h2 className="mt-5 font-serif text-2xl font-bold text-[#34263e]">Welcome back</h2>
-            <p className="mt-1 text-xs uppercase tracking-wider text-[#9879a3]">Authorized personnel only</p>
-
-            <label className="block mt-6 text-xs font-bold uppercase tracking-wider text-[#635367]" htmlFor="admin-password">
-              Admin Password
-            </label>
-            <input
-              id="admin-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="mt-2 w-full rounded-2xl border border-[#e0d6e3] bg-[#fdfbfe] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#6b4b8b] transition"
-              placeholder="Enter admin password (default: salon123)"
-            />
-            {authError && (
-              <p role="alert" className="mt-3 text-sm text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-                {authError}
-              </p>
-            )}
-            <button
-              disabled={signingIn}
-              className="mt-6 w-full rounded-full bg-[#6b4b8b] hover:bg-[#563872] text-white py-3.5 font-bold text-sm tracking-wide transition shadow-lg shadow-violet-100 disabled:opacity-60"
-            >
-              {signingIn ? 'Signing in…' : 'Sign in to Dashboard →'}
-            </button>
-            <p className="mt-4 text-center text-xs text-[#a394a8]">
-              Guests can browse and join the queue without signing in.
-            </p>
-          </form>
-        </main>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#fffdfb]">
@@ -285,12 +169,6 @@ export default function Admin() {
               Admin & Service Studio
             </h1>
           </div>
-          <button
-            onClick={handleLogout}
-            className="rounded-full border border-[#d9cadc] bg-white px-5 py-2 text-xs font-bold text-[#6b4b8b] hover:bg-[#f8f4f9] transition shadow-sm"
-          >
-            Sign out
-          </button>
         </div>
 
         {/* Stats */}
